@@ -2,62 +2,48 @@ import streamlit as st
 from audiorecorder import audiorecorder
 import openai
 import os
-import tempfile
 from datetime import datetime
 from gtts import gTTS
 import base64
+import io
 
 
 # 
 
 
 def TTS(response):
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_audio:
-        filename = temp_audio.name
-    
+    # 메모리에서 직접 처리
+    audio_bytes = io.BytesIO()
     tts = gTTS(text=response, lang="ko")
-    tts.save(filename)
-
-    with open(filename, "rb") as f:
-        data = f.read()
-        b64 = base64.b64encode(data).decode()
-        md = f"""
-        <audio autoplay="true">
-            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-        </audio>
-        """
-    st.markdown(md, unsafe_allow_html=True,)
+    tts.write_to_fp(audio_bytes)
+    audio_bytes.seek(0)
     
-    try:
-        os.remove(filename)
-    except:
-        pass
+    # base64로 인코딩
+    b64 = base64.b64encode(audio_bytes.read()).decode()
+    md = f"""
+    <audio autoplay="true">
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+    </audio>
+    """
+    st.markdown(md, unsafe_allow_html=True)
 
-    
 
 def STT(audio, apikey):
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_audio:
-        filename = temp_audio.name
+    # 메모리에서 직접 처리
+    audio_bytes = io.BytesIO()
+    audio.export(audio_bytes, format="mp3")
+    audio_bytes.seek(0)
     
-    audio.export(filename, format="mp3")
-
     try:
         client = openai.OpenAI(api_key=apikey)
-        with open(filename, "rb") as audio_file:
-            response = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file
-            )
+        response = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=("audio.mp3", audio_bytes.read())
+        )
+        return response.text
     except Exception as e:
         st.error(f"STT 오류: {str(e)}")
         return "음성 인식에 실패했습니다."
-    finally:
-        try:
-            os.remove(filename)
-        except:
-            pass
-    
-    return response.text
 
 def ask_gpt(prompt, model, apikey):
     client = openai.OpenAI(api_key=apikey)
