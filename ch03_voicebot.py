@@ -2,6 +2,7 @@ import streamlit as st
 from audiorecorder import audiorecorder
 import openai
 import os
+import tempfile
 from datetime import datetime
 from gtts import gTTS
 import base64
@@ -11,7 +12,9 @@ import base64
 
 
 def TTS(response):
-    filename = 'output.mp3'
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_audio:
+        filename = temp_audio.name
+    
     tts = gTTS(text=response, lang="ko")
     tts.save(filename)
 
@@ -25,22 +28,35 @@ def TTS(response):
         """
     st.markdown(md, unsafe_allow_html=True,)
     
-    os.remove(filename)
+    try:
+        os.remove(filename)
+    except:
+        pass
 
     
 
 def STT(audio, apikey):
-    filename = 'input.mp3'
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_audio:
+        filename = temp_audio.name
+    
     audio.export(filename, format="mp3")
 
-    audio_file = open(filename, "rb")
-    client = openai.OpenAI(api_key=apikey)
-    response = client.audio.transcriptions.create(
-        model="whisper-1",
-        file=audio_file
-    )
-    audio_file.close()
-    os.remove(filename)
+    try:
+        client = openai.OpenAI(api_key=apikey)
+        with open(filename, "rb") as audio_file:
+            response = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+    except Exception as e:
+        st.error(f"STT 오류: {str(e)}")
+        return "음성 인식에 실패했습니다."
+    finally:
+        try:
+            os.remove(filename)
+        except:
+            pass
+    
     return response.text
 
 def ask_gpt(prompt, model, apikey):
