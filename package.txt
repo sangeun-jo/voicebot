@@ -1,0 +1,2 @@
+ffmpeg
+# 윈도우에서 powershell로 설치 필요(coco)
